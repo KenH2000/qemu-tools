@@ -1,0 +1,188 @@
+------------------------------------------------------------------
+                           qemu-img
+------------------------------------------------------------------
+#https://pancakehut.net/2024/01/working-with-qcow2-disk-images/
+#https://gist.github.com/startergo/ad988727a7c5c14d56efecf74724ee7e
+#https://www.hackingnote.com/en/cheatsheets/qemu/
+
+#Info
+qemu-img info source.qcow2
+
+------------------------------------------------------
+qemu-img create [-f fmt] filename [size]
+------------------------------------------------------
+#Create RAW: 
+qemu-img create -f raw test.img 1G
+
+#Create QCOW2: 
+qemu-img create -f qcow2 test.img 10G
+
+------------------------------------------------------
+qemu-img convert [-f fmt] [-O out_fmt] infile outfile
+------------------------------------------------------
+#QCOW2 to RAW:
+qemu-img convert -f qcow2 -O raw /path/source.qcow2 /path/output.raw
+
+#RAW to QCOW2
+qemu-img convert -f raw -O qcow2 /path/image.img image.qcow2
+
+------------------------------------------------------
+qemu-img resize [-f fmt] filename [+/-size]
+------------------------------------------------------
+#Resize QCOW2 img (add 10G)
+qemu-img resize disk.qcow2 +10G
+
+#Shrink QCOW2 img
+-------------------------
+#1. In VM guest drive, the folowing writes zeros to unused space
+dd if=/dev/zero of=zerofile bs=1M
+rm zerofile
+
+#2. Shut down VM and run on the 'zeroed' host img:
+qemu-img convert -f raw -O qcow2 guest.img guest-copy.qcow2
+-------------------------
+
+#Mount/Umount
+-------------------------
+#Mount QCOW2 img
+modprobe nbd max_part=8
+qemu-nbd --connect=/dev/nbd1 /media/yourfolder/disk.qcow2
+mkdir /media/diskname
+mount /dev/nbd1p1 /media/diskname
+
+#Umount QCOW2 img
+umount /media/diskname
+rmdir /media/diskname
+qemu-nbd --disconnect /dev/nbd1
+rmmod nbd
+-------------------------
+
+------------------------------------------------------------------
+                         qemu-monitor
+------------------------------------------------------------------
+https://doc.opensuse.org/documentation/leap/virtualization/html/book-virtualization/cha-qemu-monitor.html
+https://doc.opensuse.org/documentation/leap/archive/42.3/virtualization/html/book.virt/cha.qemu.monitor.html
+https://www.linux-kvm.org/page/Hotadd_pci_devices
+
+#change 'disc' (file iso/img) in cdrom
+#virtio raw img are not removable
+info block
+...
+ide1-cd0
+...
+eject ide1-cd0
+change ide1-cd0 /media/nasdata/data/images/BartPE.iso
+
+#add drive and device
+drive_add 0 if=none,file=/media/nasdata/data/images/android-x86_64-9.0-r2-k49.iso,id=myid,format=raw
+device_add virtio-blk-pci,drive=myid
+
+#del drive (del_device fails with id not found error)
+drive_del myid
+
+#---------add usb------------------------------------------------
+#add usb devices to udev rules at /etc/udev/rules.d/99-usb-stick.rules 
+SUBSYSTEM=="usb", ATTR{idVendor}=="04b4", MODE="0666"
+SUBSYSTEM=="usb", ATTR{idVendor}=="abcd", MODE="0666"
+
+#trigger udev
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
+#--OR-- add write permission to usb devices (not persistent)
+sudo chmod a+w -R /dev/bus/usb/
+
+#------load the new usb (-usb required on startup line)-----------
+qemu-mtr> device_add qemu-xhci,id=xhci 
+qemu-mtr> device_add usb-host,vendorid=0xabcd,productid=0x1234
+
+------------------------------------------------------------------
+                           qemu (ports)
+------------------------------------------------------------------
+#https://www.tecmint.com/find-out-which-process-listening-on-a-particular-port/
+#check ports used by qemu
+sudo lsof -i -P -n |grep qemu
+
+#check specific port
+sudo lsof -i tcp:9000
+
+#forward port (fwd host 8888 to guest ssh port)
+-net user,hostfwd=tcp::8888-:22 \
+
+to ssh to VM:
+ssh -p 8888 user@127.0.0.1
+
+#host ip from guest is 10.0.2.2
+
+------------------------------------------------------------------
+                       qemu (add usb to VM)
+------------------------------------------------------------------
+#add usb devices to udev rules at /etc/udev/rules.d/99-usb-stick.rules 
+SUBSYSTEM=="usb", ATTR{idVendor}=="04b4", MODE="0666"
+SUBSYSTEM=="usb", ATTR{idVendor}=="abcd", MODE="0666"
+
+#lsusb shows vendor and product ID
+lsusb
+Bus 002 Device 003: ID 04b4:8613 MyUsb device
+
+set qemu option:
+-usb                     \
+-device qemu-xhci,id=xhci \
+-device usb-host,vendorid=0x04b4,productid=0x8613 \
+
+#can be added at runtime using qemu-monitor  
+
+------------------------------------------------------------------
+                  qemu (Win 10 guest sshfs drive)
+------------------------------------------------------------------
+#required files
+c:\users\admin\scripts\nircmd.exe
+sshfs-win-3.5.20357-x64.msi
+
+#qemu port fwd
+-net user,hostfwd=tcp::8888-:8888 \
+
+#WinXp
+sshfs not supported.  Use samba shares, ie \\10.0.2.2 in file window.
+
+create file to start scripts in Startup folder:
+c:/Users/Admin/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/startscripts.bat
+
+-----------contents of startscripts.bat:-----------
+c:\users\admin\scripts\nircmd exec hide c:\users\admin\scripts\starttools.bat
+---------------------------------------------------
+
+create c:/Users/Admin/scripts/starttools.bat to start sshfs share and clipboard
+
+-----------contents of starttools.bat--------------
+net use x: \\sshfs\<user>@10.0.2.2 <password> /persistent:no
+:a
+ncat -l 8888|clip
+goto a
+---------------------------------------------------
+
+------------Win Guest clipbd to Host---------------
+#required file
+c:\users\admin\scripts\winclip.exe
+
+#host run listener script
+while true;do netcat -l 8899|xsel -ib; done
+
+----contents c:\users\admin\scripts\cbtolx.bat-----
+
+@echo off
+:main
+timeout /t 1 > nul
+rem save cur cb
+winclip -p > cb.txt
+fc cb.txt cx.txt > nul
+if errorlevel 1 goto send
+goto main
+
+:send
+rem save last cb
+winclip -p > cx.txt
+winclip -p|ncat -w 1 10.0.2.2 8899
+goto main
+----------------------------------------------------
+
