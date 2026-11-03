@@ -213,4 +213,14 @@ Options added in .vm script to use tap0:
 -netdev tap,id=mynet0,ifname=tap0,script=no,downscript=no \
 -device e1000,netdev=mynet0,mac=52:55:00:d1:55:01 \
 ```
+
 --------------------------------------------------------------------
+Use With Other Emulators
+--------------------------------------------------------------------
+Example .vm script to start a Dosbox emulator 
+```
+#!/bin/bash
+#VM_DOSBOX-X
+
+dosbox-x C /home/$USER/data/vms/dos/EMP10
+```
