@@ -1,7 +1,7 @@
 --------------------------------------------------------------------
 qemu tools
 --------------------------------------------------------------------
-![screenshot](qemu-tools.png)
+![screenshot](screenshot.png)
 
 Tools to simplify qemu basic functions:
 
