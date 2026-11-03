@@ -1,6 +1,8 @@
 --------------------------------------------------------------------
 qemu tools
 --------------------------------------------------------------------
+![screenshot](qemu-tools.png)
+
 Tools to simplify qemu basic functions:
 
 <li>qemu-mgr.py   - Python Gtk GUI to run/edit VM scripts.*
