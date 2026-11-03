@@ -1,0 +1,117 @@
+#!/bin/bash
+
+#--------------------------------------
+#              config
+#--------------------------------------
+port=9000
+ip=127.0.0.1
+cd_id=ide1-cd0
+drive_dir=$(dirname "$(realpath "$0")")/
+cdrom_dir=$(dirname "$(realpath "$0")")/
+#--------------------------------------
+
+idct=0
+
+send(){
+echo "$@" |nc -N "$ip" "$port"
+}
+
+usb()
+{
+readarray -t darr <<<$(lsusb)
+
+ct=0
+dlgarr=()
+for i in "${darr[@]}";do
+  ((ct+=1))
+  dlgarr+=("$ct" "$i" "off")
+  #echo "$ct $i"
+done
+
+ans=$(dialog --radiolist "Select Device" 20 100 15 "${dlgarr[@]}" 3>&1 1>&2 2>&3)
+clear;
+#echo "${darr[$ans-1]}"
+    if [ "${#ans}" -gt 0 ];then
+    vid="${darr[$ans-1]}"
+    vid="${vid#*ID}"
+    prid="${vid:6:4}"
+    vid="${vid:1:4}"  
+    cmd1="device_add usb-host,vendorid=0x$vid,productid=0x$prid"
+#   echo "$cmd1"
+#   exit
+    send "$cmd1" 
+    history -s "$cmd1"
+    fi
+}
+
+drive(){
+#ans=$(zenity --file-selection --filename="$drive_dir")
+ans=$(dialog --fselect "$drive_dir" 10 60 3>&1 1>&2 2>&3)
+clear
+    if [ "${#ans}" -gt 0 ];then
+    cmd1="drive_add 0 \"if=none,file=$ans,id=vhd$idct\""
+    cmd2="device_add virtio-blk-pci,drive=vhd$idct"
+    send "$cmd1" 
+    history -s "$cmd1"
+    sleep 1
+    send "$cmd2"
+    history -s "$cmd2"
+    ((idct+=1))
+    fi
+}
+
+cdrom(){
+  #ans=$(zenity --file-selection --filename="$cdrom_dir")
+  ans=$(dialog --fselect "$cdrom_dir" 10 60 3>&1 1>&2 2>&3)
+  clear
+    if [ "${#ans}" -gt 0 ];then
+    send "eject $cd_id"
+    history -s "eject $cd_id"
+    sleep 2
+    send "change $cd_id \"$ans\""
+    history -s "change $cd_id \"$ans\""
+    fi
+}
+
+if [ -z "$1" ];then 
+  echo "$(basename $0) [ip] [port]"
+else
+  while [ "${#@}" -gt 0 ];do  
+    if [[ "$1" =~ ^(([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))\.){3}([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))$ ]]; then
+      ip="$1"
+    fi
+    if [[ "$1" =~ ^[0-9]+$ ]]; then
+      if [ "$1" -gt 0 ] && [ "$1" -lt 65536 ];then
+        port="$1"
+      fi
+    fi
+    shift
+  done
+fi
+
+echo "qemu mtr $ip:$port Ctrl-C to exit"
+
+while IFS="" read -r -e -d $'\n' -p 'qemu-mtr> ' line; do 
+  #echo "$line"
+  history -s "$line"
+  if [ "$line" = "drive" ];then
+  drive
+  elif [ "$line" = "cdrom" ];then
+  cdrom
+  elif [ "$line" = "usb" ];then
+  usb
+  elif [ "$line" = "help" ];then
+  send "$line"
+  echo
+  echo "cdrom -- change cdrom with file selection"
+  echo "drive -- add virtual drive with file selection"
+  echo "usb   -- add usb device"
+  echo "exit  -- exit qemu-mtr"
+  elif [ "$line" = "exit" ];then
+  exit
+  else
+  send "$line"
+  fi
+echo 
+done
+

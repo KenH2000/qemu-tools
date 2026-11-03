@@ -1,0 +1,125 @@
+#!/bin/bash
+
+#https://github.com/cdown/clipnotify
+#gcc clipnotify.c -o clipnotify -lX11 -lXfixes
+#https://nmap.org/download.html#windows
+
+#default send clipboard using ssh
+#  guest requires:
+#    - openssh-server 
+#    - passwordless ssh (authorized_keys) 
+#    - ssh port fwd qemu option (-net user,hostfwd=tcp::8888-:22)
+#netcat sends clipboard over netcat 
+#  guest requires:
+#    - port fwd qemu option (-net user,hostfwd=tcp::8888-:8888)
+#    - guest netcat script
+
+
+ip=127.0.0.1
+port=8888
+un="$USER"
+sendover="ssh"        #default to ssh or netcat
+
+guest_scripts(){
+echo '''
+------------------------
+|     linux guest      |
+------------------------
+#!/bin/bash
+while true;do
+netcat -l '''"$port"'''|xsel -ib
+done
+------------------------
+|    windows guest     |
+------------------------
+:a
+ncat -l '''"$port"''' | clip
+goto a
+------------------------
+'''
+}
+
+if [ -z "$1" ];then
+  echo "$(basename $0) [-u user] [destination_ip] [destination_port] [netcat]"
+else
+  while [ "${#@}" -gt 0 ];do  
+    if [[ "$1" =~ ^(([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))\.){3}([1-9]?[0-9]|1[0-9][0-9]|2([0-4][0-9]|5[0-5]))$ ]]; then
+      ip="$1"
+    fi
+    if [[ "$1" =~ ^[0-9]+$ ]]; then
+      if [ "$1" -gt 0 ] && [ "$1" -lt 65536 ];then
+        port="$1"
+      fi
+    fi
+    if [ "$1" = "netcat" ];then
+      guest_scripts
+      sendover=netcat
+    fi 
+    if [ "$1" = "-u" ];then
+      shift
+      un="$1"
+    fi
+    shift
+  done
+fi
+echo "qemu-clip $un@$ip:$port over $sendover"
+
+pstcb(){
+s="-----------------------------clip--------------------------------"$'\n'
+c=$(xsel -ob)
+#echo "$s$c"$'\n'"$s"|nc -w 1 "$1" "$port"
+echo "$c"|nc -w 1 "$ip" "$port" 1>/dev/null
+}
+sshpst(){
+c=$(xsel -ob|base64)
+ssh -p"$port" "$un@$ip" "echo '$c'|base64 -d|xsel --display :0 -ib" 1>/dev/null 2>/dev/null
+}
+
+use_clipnotify_ssh(){
+  while true;do
+    clipnotify -s clipboard
+    sshpst
+  done
+}
+use_clipnotify(){
+  while true;do
+    clipnotify -s clipboard
+    pstcb
+  done
+}
+
+use_poll_ssh(){
+  while true;do
+    sleep 2
+    cur=$(xsel -ob)
+    if [ "$cur" != "$sav" ];then
+      sav=$(xsel -ob)
+      sshpst
+    fi
+  done
+}
+
+use_poll(){
+  while true;do
+    sleep 2
+    cur=$(xsel -ob)
+    if [ "$cur" != "$sav" ];then
+      sav=$(xsel -ob)
+      pstcb
+    fi
+  done
+}
+
+if command -v clipnotify >/dev/null 2>&1;then
+  if [ "$sendover" = netcat ];then
+    use_clipnotify 
+  else
+    use_clipnotify_ssh 
+  fi
+else
+  if [ "$sendover" = netcat ];then
+    use_poll
+  else
+    use_poll_ssh 
+  fi
+fi

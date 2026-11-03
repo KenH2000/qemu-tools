@@ -1,0 +1,77 @@
+#!/bin/bash
+
+src=$(dirname "$(realpath "$0")")/
+
+text()
+{
+cd "$src"
+varr=( $(ls *.vm ) ) #|awk '{print $1}'|sed 's/"//g') )
+
+  ct=1
+  for i in "${varr[@]}";do 
+    echo "$ct - $i"
+    ct=$(( ct + 1 ))
+  done
+
+  echo -n "Enter number (0 to exit): "
+  read input
+  #input="${input//[$'\t\r\n ']}"
+  ans=$((input))
+  if [ "$ans" -gt "${#varr[@]}" ]||[ "$ans" -lt 1 ];then
+    echo 'Exiting...'
+    exit
+  fi
+  bash "${varr[input -1]}" &
+}
+
+tui()
+{
+cd "$src"
+varr=( $(ls *.vm ) ) #|awk '{print $1}'|sed 's/"//g') )
+
+ct=0
+dlgarr=()
+for i in "${varr[@]}";do
+((ct+=1))
+dlgarr+=("$ct" "$i" "off")
+#echo "$ct $i"
+done
+
+#echo "${dlgarr[@]}"
+ans=( $(dialog --radiolist "Select VM" 25 60 15 ${dlgarr[@]} 3>&1 1>&2 2>&3) )
+if [ "$?" != 0 ];then clear; exit;fi
+clear;
+bash "${varr[$ans -1]}" &
+}
+
+gui()
+{
+cd "$src"
+mylist=$(ls *.vm ) #|awk '{print $1}'|sed 's/"//g') )
+hostarray=()
+hostarray+=("VM Name")
+#hostarray+=(" " "Default NIC")
+
+while IFS= read -r line 
+  do 
+  #hostarray+=('FALSE')
+  hostarray+=(" " "$(echo "${line/.vm/}")")
+done <<< "$mylist"
+
+ans=$(zenity --list --title="-qemu-" --text="Select VM:" --radiolist --column='' --column "${hostarray[@]}" --height=500)
+if [ "${#ans}" -eq 0 ];then
+  exit
+fi
+
+IFS='|' read -ra ansarr <<< "$ans"
+bash "${ansarr[0]}.vm" &
+}
+
+if [ "$1" = "gui" ];then
+gui
+elif [ "$1" = "text" ];then
+text 
+else
+tui
+fi
+

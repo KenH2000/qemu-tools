@@ -1,0 +1,39 @@
+#!/bin/bash
+#sends windows clipboard to linux
+#winclip for windows:
+#https://www.spinellis.gr/sw/outwit/
+#ncat for windows:
+#https://nmap.org/download.html#windows
+IP=10.0.2.2 #default host ip
+PORT=8899
+
+windows(){
+echo '''
+rem save as batch script---------------------
+@echo off
+:main
+timeout /t 1 > nul
+rem save cur cb
+winclip -p > cb.txt
+fc cb.txt cx.txt > nul
+if errorlevel 1 goto send
+goto main
+
+:send
+rem save last cb
+winclip -p > cx.txt
+winclip -p|ncat -w 1 '''"$IP $PORT"'''
+goto main
+rem -----------------------------------------
+'''
+}
+
+linux(){
+#run on linux-----------------------------
+while true;do
+netcat -l "$PORT"|xsel -b
+done
+}
+#-----------------------------------------
+windows
+linux 

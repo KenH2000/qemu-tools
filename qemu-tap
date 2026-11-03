@@ -1,0 +1,58 @@
+#!/bin/bash
+
+#nic tap https://gist.github.com/extremecoders-re/e8fd8a67a515fee0c873dcafc81d811c
+
+#tap option
+#-netdev tap,id=mynet0,ifname=tap0,script=no,downscript=no -device e1000,netdev=mynet0,mac=52:55:00:d1:55:01 \
+
+tapsetup(){
+sudo brctl addbr br0
+sudo ip addr flush dev eno1
+sudo brctl addif br0 eno1
+sudo tunctl -t tap0 -u `whoami`
+sudo brctl addif br0 tap0
+sudo ifconfig eno1 up
+sudo ifconfig tap0 up
+sudo ifconfig br0 up
+sudo brctl show
+sudo dhclient -v br0
+sudo dhclient -v eno1
+#add second tap
+#sudo tunctl -t tap1 -u `whoami`
+#sudo brctl addif br0 tap1
+#sudo ifconfig tap1 up
+}
+tapremove(){
+sudo brctl delif br0 tap0
+sudo tunctl -d tap0
+#sudo tunctl -d tap1
+sudo brctl delif br0 eno1
+sudo ifconfig br0 down
+sudo brctl delbr br0
+sudo ifconfig eno1 up
+sudo dhclient -v eno1
+#dhclient - Auto configuration using a DHCP server
+sudo dhclient -v -r eno1 #release
+sudo dhclient -v eno1
+}
+
+
+if [ -z "$1" ];then 
+  x=$(ifconfig|grep tap0)
+  if [ ${#x} -gt 0 ];then
+    echo "tap0 is installed"
+  else
+    echo "tap0 is not installed" 
+  fi
+  echo "$(basename $0) 0 (to remove)"
+  echo "$(basename $0) 1 (to install)"
+  exit
+else 
+  if [ "$1" -eq 1 ];then
+    tapsetup
+  else 
+    tapremove
+  fi
+fi
+
+

@@ -1,0 +1,24 @@
+#!/bin/sh
+
+#start clipboard sender 
+qemu-clip &
+pid="$!"
+
+/usr/bin/qemu-system-x86_64 \
+-cpu host \
+-enable-kvm \
+-smp 2 \
+-m 4096 \
+-cdrom "/media/nasdata/data/images/FD14LIVE.iso" \
+-drive file="/home/$USER/data/vms/linux/mint.img",if=virtio \
+-boot menu=on \
+-vga std \
+-show-cursor \
+-name "Linux" \
+-net nic,model=e1000 \
+-net user,hostfwd=tcp::8888-:22 \
+-monitor tcp:127.0.0.1:9000,server,nowait \
+
+#stop clipboard sender
+kill -9 "$pid"
+

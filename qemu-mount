@@ -1,0 +1,70 @@
+#!/bin/bash
+
+unmount(){
+  if [ -z "$2" ];then
+    ct=1
+    mtarr=( $(mount|grep /dev/nbd|awk '{print $1}') )
+    echo "0. Cancel"
+      for i in ${mtarr[@]};do
+        echo "$ct. $i"
+        ((ct+=1))
+      done
+    echo -n "Enter no. to umount: "
+    read input
+    if [ "$input" -eq 0 ] || [ "${#mtarr[$input-1]}" -eq 0 ];then
+      echo "umount cancelled"
+      exit
+    fi
+    dvc="${mtarr[$input-1]}"
+    sudo umount "$dvc"
+    sudo qemu-nbd -d "$dvc"
+  else
+    dvc=$(mount|grep "$2"|awk '{print $1}')
+    sudo umount "$2"
+    sudo qemu-nbd -d "$dvc"
+  fi
+}
+
+partinfo(){
+sleep 1
+parts=$(lsblk -lfo name,size,fstype|grep nbd0p)
+IFS='
+'
+ct=0
+  echo "$ct.  Exit"
+for line in $parts
+do
+  ((ct+=1))
+  echo "$ct.  $line"
+  pa[$ct]=$(echo "$line"|awk '{print $1}')
+done
+echo -n "Enter Partition to mount: "
+read input
+}
+
+  if [ "$1" = "-u" ];then
+    unmount
+    exit
+  fi
+
+  if [ -z "$2" ];then
+    echo "$(basename $0) <imagefile> <mountpoint>"
+    echo "$(basename $0) -u <mountpoint>(optional)"
+    exit
+  fi
+
+  if [ ! -e /dev/nbd0 ];then 
+    sudo modprobe nbd max_part=8
+  fi
+    for i in 0 1 2 3 4 5 6 7;do
+      x=$(mount|grep /dev/nbd"$i")
+      if [ ${#x} -eq 0 ];then 
+       sudo qemu-nbd --connect=/dev/nbd"$i" "$1"
+       partinfo
+       if [ "$input" -ne 0 ];then
+         sudo mount /dev/"${pa[$input]}" "$2"
+       fi
+       break;
+      fi
+    done
+
